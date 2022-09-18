@@ -4,6 +4,9 @@ import ru.serdyuk.load_balancer.exceptions.RegistrationProviderException
 import ru.serdyuk.load_balancer.exceptions.UnregistrationProviderException
 import ru.serdyuk.load_balancer.strategies.BalanceStrategy
 import ru.serdyuk.providers.Provider
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Semaphore
+import java.util.concurrent.atomic.AtomicInteger
 
 private const val DEFAULT_MAX_PROVIDER_NUMBER = 10
 private const val MAX_PROVIDERS_NUMBER_REACHED_EXCEPTION_MESSAGE = "Max providers number reached (%d)"
@@ -15,7 +18,9 @@ class LoadBalancer(
     private val maxProvidersNumber: Int = DEFAULT_MAX_PROVIDER_NUMBER,
     private val strategy: BalanceStrategy,
 ) {
-    val providers: MutableList<Provider> = mutableListOf()
+    val providers: MutableList<Provider> = CopyOnWriteArrayList()
+    private var concurrencyLevel: AtomicInteger = AtomicInteger(0)
+    private var semaphore: Semaphore = Semaphore(0)
 
     fun registerProvider(newProvider: Provider) {
         registerProviders(listOf(newProvider))
@@ -28,7 +33,9 @@ class LoadBalancer(
             throw RegistrationProviderException(TOO_MANY_PROVIDERS_FOR_REGISTRATION_MESSAGE.format(maxProvidersNumber - providers.size))
         } else {
             providers.addAll(newProviders)
-            strategy.setProvidersNumber(providers.size)
+            strategy.setProvidersNumber(AtomicInteger(providers.size))
+            concurrencyLevel.getAndSet(providers.sumOf { it.concurrentLevel() })
+            semaphore.release(concurrencyLevel.get())
         }
     }
 
@@ -36,21 +43,21 @@ class LoadBalancer(
         if (providers.isEmpty()) {
             throw UnregistrationProviderException(NO_ANY_REGISTERED_PROVIDER_MESSAGE)
         }
-        val iterator = providers.iterator()
-        while (iterator.hasNext()) {
-            val provider = iterator.next()
-            if (provider.getId() == providerId) {
-                iterator.remove()
-                return
-            }
-        }
-        throw UnregistrationProviderException(PROVIDER_WITH_ID_NOT_FOUND_MESSAGE.format(providerId))
+        val provider = providers.firstOrNull { it.getId() == providerId }
+            ?: throw UnregistrationProviderException(PROVIDER_WITH_ID_NOT_FOUND_MESSAGE.format(providerId))
+
+        providers.remove(provider)
     }
 
     fun get(): String {
-        val providerNumber = strategy.get()
-        val provider = providers[providerNumber]
+        try {
+            semaphore.acquire()
+            val providerNumber = strategy.get()
+            val provider = providers[providerNumber]
 
-        return provider.get()
+            return provider.get()
+        } finally {
+            semaphore.release()
+        }
     }
 }
