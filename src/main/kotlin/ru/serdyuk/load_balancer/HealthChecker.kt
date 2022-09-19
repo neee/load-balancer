@@ -1,30 +1,29 @@
 package ru.serdyuk.load_balancer
 
 import ru.serdyuk.providers.Provider
+import java.time.Duration
 import kotlin.concurrent.thread
-import kotlin.time.Duration
 
 private const val MIN_AVAILABILITY_CHECK = 1
 
-class HealthChecker(
-    private val interval: Duration,
-    private val loadBalancer: LoadBalancer,
-) {
+class HealthChecker(private val interval: Duration) {
     private val unavailableProviders: MutableMap<String, ProviderAvailability> = HashMap()
+    private var started = false
 
-    fun run() {
+    fun run(loadBalancer: LoadBalancer) {
+        if (!started) started = true else return
         thread {
             while (!Thread.interrupted()) {
                 try {
-                    Thread.sleep(interval.inWholeMilliseconds)
-                    check()
+                    Thread.sleep(interval.toMillis())
+                    check(loadBalancer)
                 } catch (_: InterruptedException) {
                 }
             }
         }
     }
 
-    private fun check() {
+    private fun check(loadBalancer: LoadBalancer) {
         val providers = loadBalancer.providers + unavailableProviders.values.map { it.provider }
         val (available, unavailable) = providers.partition {
             try {

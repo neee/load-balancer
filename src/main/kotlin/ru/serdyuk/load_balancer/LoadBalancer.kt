@@ -1,9 +1,11 @@
 package ru.serdyuk.load_balancer
 
+import ru.serdyuk.load_balancer.exceptions.NoAnyAvailableProvider
 import ru.serdyuk.load_balancer.exceptions.RegistrationProviderException
 import ru.serdyuk.load_balancer.exceptions.UnregistrationProviderException
 import ru.serdyuk.load_balancer.strategies.BalanceStrategy
 import ru.serdyuk.providers.Provider
+import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicInteger
@@ -15,12 +17,12 @@ private const val NO_ANY_REGISTERED_PROVIDER_MESSAGE = "No any registered provid
 private const val PROVIDER_WITH_ID_NOT_FOUND_MESSAGE = "Provider with id = %s not found"
 
 class LoadBalancer(
-    private val maxProvidersNumber: Int = DEFAULT_MAX_PROVIDER_NUMBER,
     private val strategy: BalanceStrategy,
+    private val healthChecker: HealthChecker = HealthChecker(Duration.ofSeconds(10)),
+    private val maxProvidersNumber: Int = DEFAULT_MAX_PROVIDER_NUMBER,
 ) {
-    val providers: MutableList<Provider> = CopyOnWriteArrayList()
-    private var concurrencyLevel: AtomicInteger = AtomicInteger(0)
     private var semaphore: Semaphore = Semaphore(0)
+    val providers: MutableList<Provider> = CopyOnWriteArrayList()
 
     fun registerProvider(newProvider: Provider) {
         registerProviders(listOf(newProvider))
@@ -34,8 +36,8 @@ class LoadBalancer(
         } else {
             providers.addAll(newProviders)
             strategy.setProvidersNumber(AtomicInteger(providers.size))
-            concurrencyLevel.getAndSet(providers.sumOf { it.concurrentLevel() })
-            semaphore.release(concurrencyLevel.get())
+            semaphore.release(providers.sumOf { it.concurrentLevel() })
+            healthChecker.run(this)
         }
     }
 
@@ -46,18 +48,18 @@ class LoadBalancer(
         val provider = providers.firstOrNull { it.getId() == providerId }
             ?: throw UnregistrationProviderException(PROVIDER_WITH_ID_NOT_FOUND_MESSAGE.format(providerId))
 
+        semaphore.release(provider.concurrentLevel())
         providers.remove(provider)
     }
 
-    fun get(): String {
-        try {
-            semaphore.acquire()
+    fun get(): String =
+        if (semaphore.tryAcquire()) {
             val providerNumber = strategy.get()
             val provider = providers[providerNumber]
-
-            return provider.get()
-        } finally {
+            val value = provider.get()
             semaphore.release()
+            value
+        } else {
+            throw NoAnyAvailableProvider("Reached requests limit")
         }
-    }
 }
