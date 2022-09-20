@@ -3,6 +3,7 @@ package ru.serdyuk.load_balancer
 import ru.serdyuk.load_balancer.exceptions.NoAnyAvailableProvider
 import ru.serdyuk.load_balancer.exceptions.RegistrationProviderException
 import ru.serdyuk.load_balancer.exceptions.UnregistrationProviderException
+import ru.serdyuk.load_balancer.healthcheck.HealthChecker
 import ru.serdyuk.load_balancer.strategies.BalanceStrategy
 import ru.serdyuk.providers.Provider
 import java.time.Duration

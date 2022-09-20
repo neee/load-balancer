@@ -1,5 +1,6 @@
-package ru.serdyuk.load_balancer
+package ru.serdyuk.load_balancer.healthcheck
 
+import ru.serdyuk.load_balancer.LoadBalancer
 import ru.serdyuk.providers.Provider
 import java.time.Duration
 import kotlin.concurrent.thread
