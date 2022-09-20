@@ -10,7 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicInteger
 
-private const val DEFAULT_MAX_PROVIDER_NUMBER = 10
+const val DEFAULT_MAX_PROVIDER_NUMBER = 10
 private const val MAX_PROVIDERS_NUMBER_REACHED_EXCEPTION_MESSAGE = "Max providers number reached (%d)"
 private const val TOO_MANY_PROVIDERS_FOR_REGISTRATION_MESSAGE = "Too many providers for registration, available %d"
 private const val NO_ANY_REGISTERED_PROVIDER_MESSAGE = "No any registered provider"
