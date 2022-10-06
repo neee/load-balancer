@@ -9,7 +9,6 @@ import ru.serdyuk.providers.Provider
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Semaphore
-import java.util.concurrent.atomic.AtomicInteger
 
 const val DEFAULT_MAX_PROVIDER_NUMBER = 10
 private const val MAX_PROVIDERS_NUMBER_REACHED_EXCEPTION_MESSAGE = "Max providers number reached (%d)"
@@ -36,7 +35,6 @@ class LoadBalancer(
             throw RegistrationProviderException(TOO_MANY_PROVIDERS_FOR_REGISTRATION_MESSAGE.format(maxProvidersNumber - providers.size))
         } else {
             providers.addAll(newProviders)
-            strategy.setProvidersNumber(AtomicInteger(providers.size))
             semaphore.release(providers.sumOf { it.concurrentLevel() })
             healthChecker.run(this)
         }
@@ -49,13 +47,13 @@ class LoadBalancer(
         val provider = providers.firstOrNull { it.getId() == providerId }
             ?: throw UnregistrationProviderException(PROVIDER_WITH_ID_NOT_FOUND_MESSAGE.format(providerId))
 
-        semaphore.release(provider.concurrentLevel())
+        semaphore.acquire(provider.concurrentLevel())
         providers.remove(provider)
     }
 
     fun get(): String =
         if (semaphore.tryAcquire()) {
-            val providerNumber = strategy.get()
+            val providerNumber = strategy.get(providers.size)
             val provider = providers[providerNumber]
             val value = provider.get()
             semaphore.release()

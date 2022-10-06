@@ -2,13 +2,13 @@ package ru.serdyuk.load_balancer.strategies
 
 import java.util.concurrent.locks.ReentrantLock
 
-class RoundRobinBalanceStrategy() : AbstractBalanceStrategy() {
+class RoundRobinBalanceStrategy : BalanceStrategy {
     private var value = 0
     private val lock = ReentrantLock()
 
-    override fun getProviderNumber(): Int {
+    override fun get(providersCount: Int): Int {
         lock.lock()
-        if (value >= this.getProvidersNumber().get()) {
+        if (value >= providersCount) {
             value = 0
         }
         val providerNumber = value
